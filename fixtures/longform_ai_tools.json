@@ -1,0 +1,51 @@
+{
+  "slug": "ai-tools-time-audit",
+  "title": "The 30-Minute AI Time Audit That Saves Professionals 8 Hours a Week",
+  "hook": "Most professionals waste eight hours every week on work that an AI assistant could finish in minutes. Here is the exact thirty-minute audit that finds those hours and hands them back to you.",
+  "beats": [
+    {
+      "id": 1,
+      "narration": "Start by tracking one ordinary workday in fifteen-minute blocks. Do not change how you work yet. You are just collecting evidence. By the end of the day you will have an honest map of where your hours actually go, instead of where you assume they go.",
+      "on_screen_text": "Step 1: Track one normal day",
+      "b_roll_keywords": ["person working laptop", "office desk clock"]
+    },
+    {
+      "id": 2,
+      "narration": "Now highlight every task that is repetitive and rule-based. Writing the same kind of email, summarizing long documents, reformatting spreadsheets, drafting first versions. These are the tasks where modern language models are strongest, because the pattern almost never changes.",
+      "on_screen_text": "Step 2: Find the repetitive work",
+      "b_roll_keywords": ["spreadsheet data", "typing keyboard closeup"]
+    },
+    {
+      "id": 3,
+      "narration": "For each highlighted task, ask one question. Could a clear set of instructions produce a good enough first draft? If the answer is yes, that task is a candidate for delegation. You are not aiming for perfect. You are aiming for a strong starting point that you can edit in a fraction of the time.",
+      "on_screen_text": "Step 3: Score each task",
+      "b_roll_keywords": ["checklist notebook", "person thinking office"]
+    },
+    {
+      "id": 4,
+      "narration": "Build a small library of reusable prompts for your top three tasks. Treat a prompt like a recipe. Describe the role, the context, the format you want, and one example of a good answer. A saved prompt turns a ten-minute back-and-forth into a single click.",
+      "on_screen_text": "Step 4: Save reusable prompts",
+      "b_roll_keywords": ["artificial intelligence interface", "laptop screen code"]
+    },
+    {
+      "id": 5,
+      "narration": "Connect your tools so the output has somewhere to go. A draft that lands directly in your email client or your project board saves the hidden minutes of copying, pasting, and reformatting. Automation is not just generating text. It is removing the small steps between thinking and shipping.",
+      "on_screen_text": "Step 5: Connect your tools",
+      "b_roll_keywords": ["workflow automation", "connected network technology"]
+    },
+    {
+      "id": 6,
+      "narration": "Set a weekly review. Spend ten minutes checking which automations actually saved time and which created new work. Keep the winners, delete the rest. The professionals who get the most from these tools are not the ones with the most apps. They are the ones who prune ruthlessly.",
+      "on_screen_text": "Step 6: Review weekly",
+      "b_roll_keywords": ["calendar planning", "person reviewing charts"]
+    },
+    {
+      "id": 7,
+      "narration": "Do this for one month and the eight hours you reclaim compound. That is a full extra workday every week, spent on the deep work that actually moves your career forward, instead of the busywork a machine was happy to handle.",
+      "on_screen_text": "The payoff: one extra day a week",
+      "b_roll_keywords": ["sunrise productivity", "relaxed professional success"]
+    }
+  ],
+  "outro": "If this audit found even one hour, imagine what a full system could do. Nature of work is changing fast, and the people who adapt their workflow first are the ones who win the decade.",
+  "cta": "Subscribe for one practical AI workflow every week."
+}

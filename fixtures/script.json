@@ -1,0 +1,21 @@
+{
+  "slug": "demo",
+  "title": "Three Surprising Facts About Octopuses",
+  "hook": "Octopuses have three hearts and blue blood.",
+  "beats": [
+    {
+      "id": 1,
+      "narration": "An octopus has three hearts. Two pump blood to the gills, one to the body.",
+      "on_screen_text": "3 hearts",
+      "b_roll_keywords": ["octopus", "ocean"]
+    },
+    {
+      "id": 2,
+      "narration": "Their blood is blue because it uses copper, not iron, to carry oxygen.",
+      "on_screen_text": "blue blood",
+      "b_roll_keywords": ["octopus underwater", "deep sea"]
+    }
+  ],
+  "outro": "Nature is stranger than fiction.",
+  "cta": "Follow for one weird fact a day."
+}

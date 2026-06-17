@@ -1,0 +1,18 @@
+# Phase 1 spine dependencies (Python 3.12, CPU-only).
+#
+# torch/torchaudio MUST come from the PyTorch CPU index, NOT PyPI (which pulls a
+# multi-GB CUDA build). Install them first, then the rest:
+#
+#   pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+#
+# Both kokoro 0.9.4 and whisperx 3.1.5 only require torch>=2 / torchaudio>=2, so
+# the 2.5.1 CPU build satisfies both on Python 3.12.
+torch==2.5.1
+torchaudio==2.5.1
+kokoro==0.9.4
+soundfile==0.12.1
+whisperx==3.1.5
+pysbd==0.3.4
+requests==2.32.3
+pytest==8.3.4
