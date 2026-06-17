@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 
-from pipeline import result, manifest
+from pipeline import result, manifest, env
 
 PEXELS_LICENSE = "Pexels License (free commercial, no attribution)"
 PIXABAY_LICENSE = "Pixabay Content License (free commercial)"
@@ -144,6 +144,7 @@ def _download(url, dest, max_bytes=MAX_BYTES):
 
 
 def _fetch(slug, force=False):
+    env.load_dotenv()  # pick up keys from a gitignored .env (does not overwrite real env)
     pexels_key = os.environ.get("PEXELS_API_KEY")
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if not pexels_key and not pixabay_key:
