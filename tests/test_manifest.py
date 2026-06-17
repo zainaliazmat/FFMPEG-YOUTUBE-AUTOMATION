@@ -29,3 +29,16 @@ def test_set_stage_and_done(tmp_path, monkeypatch):
 def test_stage_done_false_when_no_manifest(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert manifest.stage_done("missing", "voice") is False
+
+
+def test_set_stage_auto_inits_when_manifest_absent(tmp_path, monkeypatch):
+    # A stage may be the first to touch a project (no orchestrator pre-init).
+    # set_stage must create the manifest rather than fail on a missing file.
+    monkeypatch.chdir(tmp_path)
+    manifest.project_dir("fresh")  # dirs exist, but no manifest.json yet
+    manifest.set_stage("fresh", "voice", status="done", artifact="audio/voiceover.wav")
+    m = manifest.load("fresh")
+    assert m["slug"] == "fresh"
+    assert m["stages"]["voice"]["status"] == "done"
+    # other known stages still present and pending
+    assert m["stages"]["stitch"]["status"] == "pending"

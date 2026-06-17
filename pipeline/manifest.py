@@ -41,7 +41,11 @@ def save(slug, data, root="project"):
 
 
 def set_stage(slug, stage, root="project", **fields):
-    data = load(slug, root)
+    try:
+        data = load(slug, root)
+    except FileNotFoundError:
+        # A stage may run before any orchestrator initialized the manifest.
+        data = init(slug, root)
     data["stages"].setdefault(stage, {}).update(fields)
     save(slug, data, root)
     return data
