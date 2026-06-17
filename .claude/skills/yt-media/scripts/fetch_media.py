@@ -155,22 +155,30 @@ def _fetch(slug, force=False):
     d = manifest.project_dir(slug)
     script = json.loads((d / "script.json").read_text())
     assets = []
+    notes = []
     for beat in script["beats"]:
         kw = " ".join(beat["b_roll_keywords"])
         pick = source = None
         if pexels_key:
-            resp = _get_json("https://api.pexels.com/videos/search",
-                             headers={"Authorization": pexels_key},
-                             params={"query": kw, "per_page": 1})
-            pick = pick_pexels_video(resp)
-            source = "pexels"
+            # A Pexels error (e.g. a 401 on a specific query) must NOT kill the
+            # run — fall back to Pixabay, the documented secondary source.
+            try:
+                resp = _get_json("https://api.pexels.com/videos/search",
+                                 headers={"Authorization": pexels_key},
+                                 params={"query": kw, "per_page": 1})
+                pick = pick_pexels_video(resp)
+                if pick:
+                    source = "pexels"
+            except Exception as exc:  # noqa: BLE001
+                notes.append(f"pexels failed for beat {beat['id']}: {exc}")
         if not pick and pixabay_key:
             resp = _get_json("https://pixabay.com/api/videos/",
                              params={"key": pixabay_key, "q": kw, "per_page": 3})
             pick = pick_pixabay(resp, "video")
-            source = "pixabay"
+            if pick:
+                source = "pixabay"
         if not pick:
-            return result.err(f"no media for beat {beat['id']} ({kw})")
+            return result.err(f"no media for beat {beat['id']} ({kw})", notes=notes)
 
         # Derive extension from the DECLARED type; fall back to Content-Type after
         # the download if the API didn't declare one.
@@ -197,10 +205,12 @@ def _fetch(slug, force=False):
         music_rel = str(music_dest.relative_to(d))
 
     manifest.set_stage(slug, "media", status="done", assets=assets,
-                       music=music_rel, music_license=(
+                       music=music_rel, notes=notes, music_license=(
                            "local CC0 (YouTube Audio Library / Pixabay)"
                            if music_rel else None))
-    return result.ok(assets=len(assets), music=music_rel)
+    sources = sorted({a["source"] for a in assets})
+    return result.ok(assets=len(assets), music=music_rel, sources=sources,
+                     notes=notes)
 
 
 def main():

@@ -104,3 +104,39 @@ def test_find_local_music_returns_file_when_present(tmp_path):
     track = mdir / "calm.mp3"
     track.write_bytes(b"ID3")
     assert fm.find_local_music(mdir) == track
+
+
+# === Resilience: a Pexels ERROR must fall back to Pixabay, not kill the run ===
+# The plan's _fetch lets a Pexels exception (e.g. a 401 on a specific query)
+# propagate, so the whole render dies even though Pixabay (the documented
+# fallback) would have served the beat.
+
+def test_pexels_error_falls_back_to_pixabay(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PEXELS_API_KEY", "pexkey")
+    monkeypatch.setenv("PIXABAY_API_KEY", "pixkey")
+    proj = tmp_path / "project" / "demo"
+    (proj / "media").mkdir(parents=True)
+    (proj).joinpath("script.json").write_text(
+        '{"slug":"demo","title":"t","hook":"h","outro":"o","cta":"c",'
+        '"beats":[{"id":1,"narration":"n","b_roll_keywords":["laptop"]}]}')
+
+    def fake_get_json(url, headers=None, params=None, retries=5):
+        if "pexels" in url:
+            raise RuntimeError("401 Client Error: Unauthorized (Invalid API key)")
+        return {"hits": [{"videos": {"large": {"url": "http://pix/v.mp4"}}}]}
+
+    def fake_download(url, dest, max_bytes=fm.MAX_BYTES):
+        dest.write_bytes(b"\x00\x00\x00")
+        return "video/mp4"
+
+    monkeypatch.setattr(fm, "_get_json", fake_get_json)
+    monkeypatch.setattr(fm, "_download", fake_download)
+
+    r = fm._fetch("demo")
+    assert r["success"] is True, r
+    from pipeline import manifest
+    assets = manifest.load("demo")["stages"]["media"]["assets"]
+    assert len(assets) == 1
+    assert assets[0]["source"] == "pixabay"  # fell back, did not crash
+    assert assets[0]["path"].endswith(".mp4")
