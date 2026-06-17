@@ -1,0 +1,4 @@
+# Pin torch to the CPU build so transitive resolution can't drag in a CUDA torch
+# or upgrade past 2.5.1. Used as: pip install -c constraints.txt -r requirements.txt
+torch==2.5.1
+torchaudio==2.5.1
