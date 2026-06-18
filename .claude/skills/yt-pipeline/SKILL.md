@@ -11,8 +11,8 @@ two human gates that keep it monetizable. Every stage emits the standard
 
 ## The chain
 ```
-yt-discover  ->  [GATE 1: topic review]  ->  yt-script  ->  [GATE 2: script approval]  ->  spine
-  topics.json                                  draft.json -> script.json                   voice -> media -> captions -> stitch -> out/*.mp4
+yt-discover -> [GATE 1: topic] -> yt-script -> [GATE 2: script] -> [GATE 3: product URLs] -> spine
+  topics.json                      draft.json -> script.json        products.json (confirmed)  capture+voice -> media -> captions -> stitch -> out/*.mp4
 ```
 
 1. **`yt-discover`** -> `project/_discovery/topics.json` (ranked: outlier + commercial-intent).
@@ -23,7 +23,15 @@ yt-discover  ->  [GATE 1: topic review]  ->  yt-script  ->  [GATE 2: script appr
 4. **GATE 2 — script approval (REQUIRED):** present the `review_summary` (title, POV,
    chapters, beat count, duration, sources). Call out `verified:false` sources and
    fast-changing facts. **STOP** for explicit approval before any rendering.
-5. Approved `script.json` -> **existing spine** -> 16:9 long-form video:
+5. **GATE 3 — product URL confirmation (REQUIRED only if the script names products):**
+   `yt-capture/scripts/capture_sites.py <slug> --init` writes a proposed
+   `products.json`; the human verifies each URL (or adds a press-kit URL / local
+   image) and sets `confirmed: true`. Capture refuses unconfirmed entries so a
+   wrong/parked domain is never recorded. Skip this gate entirely for scripts with
+   no named products. See `yt-capture/SKILL.md` and **read `RIGHTS.md` once**.
+6. Approved `script.json` -> **spine** -> 16:9 long-form video:
+   - `yt-capture/scripts/capture_sites.py <slug>` (after GATE 3; product beats get
+     the real site, the rest keep stock — optional stage, safe to skip)
    - `yt-voice/scripts/generate_voice.py <slug>`
    - `yt-media/scripts/fetch_media.py <slug>`
    - `yt-captions/scripts/generate_captions.py <slug>`
@@ -34,7 +42,8 @@ yt-discover  ->  [GATE 1: topic review]  ->  yt-script  ->  [GATE 2: script appr
 |--------------|-------------------------------|--------------------------------|
 | yt-discover  | `channel.json` (seed_channels)| `project/_discovery/topics.json` |
 | yt-script    | `channel.json`, `draft.json`  | `project/<slug>/script.json`, manifest |
-| spine        | `project/<slug>/script.json`  | `audio/`, `media/`, captions, `out/*.mp4` |
+| yt-capture   | `script.json`, `products.json`| `media/product_*.png`, manifest `stages.capture` |
+| spine        | `script.json`, manifest assets| `audio/`, `media/`, captions, `out/*.mp4` |
 
 ## Rules
 - **Both gates are mandatory.** The human approval gate is load-bearing for YouTube's

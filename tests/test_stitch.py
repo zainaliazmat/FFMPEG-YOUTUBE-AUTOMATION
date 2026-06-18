@@ -90,6 +90,52 @@ def test_build_command_mixes_voice_and_ducked_music():
     assert "[vmix]" in fc  # the voice copy is mixed back -> never dropped
 
 
+# ----------------------------------------------------- product PiP + asset floor
+
+def test_pip_inner_dims_are_even_and_reduced():
+    iw, ih = sv.pip_inner_dims("16x9")
+    assert iw % 2 == 0 and ih % 2 == 0
+    assert iw < 1920 and ih < 1080          # reduced size (Bill Graham lever)
+    assert iw == 1382 and ih == 778         # 1920*0.72, 1080*0.72 -> even
+
+
+def test_product_segment_is_pip_on_branded_card_not_full_bleed():
+    segs = [{"id": 1, "kind": "product", "duration": 2.0, "path": "media/granola.png"}]
+    cmd = sv.build_command(segs, None, "c.ass", "out/v.mp4", "16x9")
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    # composited onto the branded card (pad with CARD_BG), i.e. NOT full-bleed
+    assert f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color={sv.CARD_BG}" in fc
+    # zoomed/scaled to the reduced PiP inset, not the full frame
+    assert "s=1382x778" in fc
+
+
+def test_plan_segments_routes_product_framing_and_floors_missing_beats(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manifest = __import__("pipeline.manifest", fromlist=["manifest"])
+    manifest.project_dir("proj")
+    script = {"hook": "h", "outro": "o"}
+    timings = [
+        {"id": 0, "start": 0.0, "end": 1.0},
+        {"id": 4, "start": 1.0, "end": 3.0},
+        {"id": 5, "start": 3.0, "end": 5.0},
+        {"id": -1, "start": 5.0, "end": 6.0},
+    ]
+    by_beat = {
+        4: {"beat": 4, "path": "media/granola.png", "framing": "pip"},  # product
+        5: {"beat": 5, "path": "media/beat_5.mp4"},                     # stock video
+    }
+    segs = sv.plan_segments("proj", "16x9", script, timings, by_beat)
+    kinds = {s["id"]: s["kind"] for s in segs}
+    assert kinds[0] == "card" and kinds[-1] == "card"
+    assert kinds[4] == "product"   # framing:pip -> PiP card
+    assert kinds[5] == "video"
+
+    # a body beat with no asset must fail with the full missing list, not deep in ffmpeg
+    with pytest.raises(RuntimeError) as e:
+        sv.plan_segments("proj", "16x9", script, timings, {4: by_beat[4]})
+    assert "5" in str(e.value)
+
+
 # --------------------------------------------------------------- real renders
 
 def _ffprobe_duration(path):
@@ -208,6 +254,27 @@ def test_render_image_zoompan_exact_duration_and_dims(tmp_path):
         capture_output=True, text=True).stdout.strip()
     assert info == "1920,1080,yuv420p"
     assert abs(_ffprobe_duration(d / "out" / "img.mp4") - 2.0) < 0.15
+
+
+@needs_ffmpeg
+def test_render_product_pip_is_valid_and_correct_dims(tmp_path):
+    # The product PiP filter graph must be valid ffmpeg and still output a full
+    # 1920x1080 frame (the inset sits on the branded card).
+    d = _project(tmp_path)
+    _make_wav(d / "audio" / "voiceover.wav", 2.0)
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+                    "color=c=white:s=1920x1080:d=1", "-frames:v", "1",
+                    str(d / "media" / "granola.png")], check=True, capture_output=True)
+    (d / "cap.ass").write_text(_ass("x"))
+    segs = [{"id": 1, "kind": "product", "duration": 2.0, "path": "media/granola.png"}]
+    sv.run_ffmpeg(sv.build_command(segs, None, "cap.ass", "out/pip.mp4", "16x9"),
+                  cwd=d)
+    info = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=width,height,pix_fmt", "-of", "csv=p=0", str(d / "out" / "pip.mp4")],
+        capture_output=True, text=True).stdout.strip()
+    assert info == "1920,1080,yuv420p"
+    assert abs(_ffprobe_duration(d / "out" / "pip.mp4") - 2.0) < 0.15
 
 
 @needs_ffmpeg

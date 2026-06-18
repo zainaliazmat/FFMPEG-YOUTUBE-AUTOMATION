@@ -39,13 +39,18 @@ def review_summary(script):
         f"  - {s.get('claim')} -> {s.get('source')} {s.get('url', '')}"
         f"{'' if s.get('verified') else '  [UNVERIFIED]'}"
         for s in script.get("sources", [])) or "  (none)"
+    prods = "\n".join(
+        f"  - {p.get('name')} (beats {p.get('beats')})"
+        for p in script.get("products", [])) or "  (none)"
     return (
         f"TITLE: {script.get('title')}\n"
         f"POV: {script.get('channel_pov')}\n"
         f"~{script.get('estimated_duration_min')} min, "
         f"{len(script.get('beats', []))} beats, "
-        f"{len(script.get('sources', []))} sources\n"
+        f"{len(script.get('sources', []))} sources, "
+        f"{len(script.get('products', []))} products\n"
         f"CHAPTERS:\n{chs}\n"
+        f"PRODUCTS (capture targets -> confirm URLs at GATE 3):\n{prods}\n"
         f"SOURCES:\n{srcs}"
     )
 

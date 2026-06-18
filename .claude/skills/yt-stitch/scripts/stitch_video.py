@@ -21,11 +21,15 @@ import json
 import subprocess
 from pathlib import Path
 
-from pipeline import result, manifest
+from pipeline import result, manifest, assets as pipeline_assets
 
 DIMS = {"9x16": (1080, 1920), "16x9": (1920, 1080)}
 CARD_FONTSIZE = {"9x16": 88, "16x9": 64}
 CARD_BG = "0x0b1a2a"
+# A product still is never rendered full-bleed 1:1 (the *Bill Graham* reduced-size
+# lever). It is composited as picture-in-picture on the branded card at this scale.
+PIP_SCALE = 0.72
+IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
 # A bold system font for title cards (verified present on the build box).
 _FONT_CANDIDATES = (
@@ -58,6 +62,12 @@ def _norm(fps):
     return f"fps={fps},format=yuv420p,setsar=1,setpts=PTS-STARTPTS"
 
 
+def pip_inner_dims(aspect, scale=PIP_SCALE):
+    """Even-numbered (w,h) of the picture-in-picture inset for a product still."""
+    w, h = DIMS[aspect]
+    return (round(w * scale) // 2) * 2, (round(h * scale) // 2) * 2
+
+
 def _escape_ass_path(path):
     # Escape for use inside a single-quoted ass= filter argument.
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
@@ -84,6 +94,20 @@ def _segment_input_and_filter(seg, idx, aspect, fps):
         # Single still frame (no -loop / -t); zoompan d= fixes frame count (C2).
         inp = ["-i", seg["path"]]
         chain = (f"[{idx}:v]scale={w * 2}:-2,{zoompan_clause(dur, aspect, fps)},"
+                 f"setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]")
+        return inp, chain
+
+    if kind == "product":
+        # A captured product website still: never full-bleed. Gently Ken-Burns the
+        # still INTO a reduced-size PiP inset, then pad it onto the branded card so
+        # the final frame is a transformed, reduced-size reproduction (autoplan F2).
+        inp = ["-i", seg["path"]]
+        iw, ih = pip_inner_dims(aspect)
+        frames = int(round(dur * fps))
+        chain = (f"[{idx}:v]scale={iw * 2}:-2,"
+                 f"zoompan=z='min(zoom+0.0008,1.06)':d={frames}:"
+                 f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={iw}x{ih}:fps={fps},"
+                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color={CARD_BG},"
                  f"setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]")
         return inp, chain
 
@@ -156,13 +180,25 @@ def _wrap_text(text, width):
     return "\n".join(lines)
 
 
-def plan_segments(slug, aspect, script, timings, assets):
+def plan_segments(slug, aspect, script, timings, by_beat):
     """Build the full-timeline segment list and write card text files.
-    Hook (id 0) and outro (id -1) become title cards; beats use their asset."""
+    Hook (id 0) and outro (id -1) become title cards; beats use their asset.
+
+    ``by_beat`` is the reconciled ``{beat_id: asset}`` map (stock b-roll overlaid
+    with captured product stills, capture winning) from ``pipeline.assets``."""
     d = manifest.project_dir(slug)
     cards = d / "cards"
     cards.mkdir(exist_ok=True)
-    by_beat = {a["beat"]: a for a in assets}
+    # Floor (autoplan F6): every body beat MUST have an asset before we plan ffmpeg.
+    # A capture_failed product beat falls back to its stock b-roll upstream; if even
+    # that is missing, fail HERE with the full list, not deep inside ffmpeg planning.
+    missing = sorted(t["id"] for t in timings
+                     if t["id"] not in (0, -1) and t["id"] not in by_beat)
+    if missing:
+        raise RuntimeError(
+            f"no media asset for beat id(s) {missing}: every body beat needs a "
+            f"stock or product asset before stitch (a capture_failed beat must "
+            f"fall back to stock b-roll)")
     segments = []
     for t in timings:
         dur = round(t["end"] - t["start"], 3)
@@ -178,11 +214,15 @@ def plan_segments(slug, aspect, script, timings, assets):
             segments.append({"id": t["id"], "kind": "card", "duration": dur,
                              "textfile": str(tf.relative_to(d))})
             continue
-        asset = by_beat.get(t["id"])
-        if not asset:
-            raise RuntimeError(f"no media asset for beat id {t['id']}")
+        asset = by_beat[t["id"]]  # floor check above guarantees presence
         path = asset["path"]
-        kind = "image" if path.lower().endswith((".jpg", ".jpeg", ".png", ".webp")) else "video"
+        is_img = path.lower().endswith(IMG_EXTS)
+        if is_img and asset.get("framing") == "pip":
+            kind = "product"   # captured product still -> PiP card (never full-bleed)
+        elif is_img:
+            kind = "image"     # stock photo -> full-bleed Ken Burns
+        else:
+            kind = "video"
         segments.append({"id": t["id"], "kind": kind, "duration": dur, "path": path})
     return segments
 
@@ -202,12 +242,16 @@ def _render(slug, force=False, aspects=("16x9",)):
     script = json.loads((d / "script.json").read_text())
     m = manifest.load(slug)
     timings = m["stages"]["voice"]["beat_timings"]
-    assets = m["stages"]["media"]["assets"]
+    media_assets = m["stages"]["media"]["assets"]
+    # Reconcile stock b-roll with captured product stills (capture wins per beat).
+    # stages.capture is optional: a project with no product captures just uses stock.
+    capture_assets = (m["stages"].get("capture") or {}).get("assets", []) or []
+    by_beat = pipeline_assets.merge_assets(media_assets, capture_assets)
     music = m["stages"]["media"].get("music")
 
     outputs = []
     for aspect in aspects:
-        segments = plan_segments(slug, aspect, script, timings, assets)
+        segments = plan_segments(slug, aspect, script, timings, by_beat)
         captions = f"captions_{aspect}.ass"
         out_rel = f"out/video_{aspect}.mp4"
         cmd = build_command(segments, music, captions, out_rel, aspect)

@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-STAGES = ("voice", "media", "captions", "stitch")
+STAGES = ("capture", "voice", "media", "captions", "stitch")
 
 
 def project_dir(slug, root="project"):
@@ -23,11 +23,22 @@ def _manifest_path(slug, root="project"):
 
 
 def init(slug, root="project"):
-    data = {
-        "slug": slug,
-        "created": datetime.now(timezone.utc).isoformat(),
-        "stages": {s: {"status": "pending"} for s in STAGES},
-    }
+    # Idempotent: seed any missing base stages but NEVER clobber existing stage
+    # data. yt-script runs init on every (re)run; a blind overwrite here would
+    # wipe stages.capture / stages.media when the script is regenerated, silently
+    # orphaning already-captured PNGs and fetched b-roll (autoplan eng F4).
+    try:
+        data = load(slug, root)
+    except FileNotFoundError:
+        data = {
+            "slug": slug,
+            "created": datetime.now(timezone.utc).isoformat(),
+            "stages": {},
+        }
+    data.setdefault("slug", slug)
+    data.setdefault("stages", {})
+    for s in STAGES:
+        data["stages"].setdefault(s, {"status": "pending"})
     save(slug, data, root)
     return data
 

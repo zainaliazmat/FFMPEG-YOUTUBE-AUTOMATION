@@ -74,12 +74,25 @@ channel's voice and a clear, original point of view. Read `niche`, `target_audie
   "cta": "...",
   "chapters": [ { "title": "...", "start_beat": 1 } ],
   "midroll_beats": [ 14, 24 ],
-  "sources": [ { "claim": "...", "source": "...", "url": "...", "verified": false } ]
+  "sources": [ { "claim": "...", "source": "...", "url": "...", "verified": false } ],
+  "products": [ { "name": "Granola", "beats": [4, 5, 6] } ]
 }
 ```
 Beat `id`s must be **unique positive integers**. `word_count` and
 `estimated_duration_min` are computed for you — do not set them.
 `fixtures/longform_draft.json` is a complete worked example.
+
+### `products[]` — name the tools this video reviews (enables yt-capture)
+If the script names specific products (a review/comparison video), emit a
+`products` array: one entry per product, with the **body-beat ids that mention
+it**. Downstream, `yt-capture` turns each into the real product website on screen
+(behind a human URL gate); generic beats keep stock b-roll.
+- `name` must be non-empty; every `beats` id must be a real body beat in this
+  script (validation rejects a typo or a card id 0/-1).
+- `products` is **optional and additive** — omit it for non-product videos. Existing
+  scripts without it still validate; `yt-capture --init` falls back to detecting
+  proper nouns. Only fields here are `name` + `beats`; URLs are confirmed later at
+  GATE 3, not written by you here.
 
 ## Process & the human gate
 1. **Research** the topic; synthesize an **original POV**. Use web tools if available.

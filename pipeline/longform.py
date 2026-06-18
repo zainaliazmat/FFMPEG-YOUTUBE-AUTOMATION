@@ -64,4 +64,10 @@ def validate_longform_script(data, channel=None):
     if not data.get("channel_pov"):
         errs.append("channel_pov required")
 
+    # Optional products[] (yt-capture input). Absent = valid; when present, each
+    # entry's beats must be real body beats so a typo can't silently mis-target
+    # capture (autoplan eng F7). Validated against the body-beat ids.
+    errs += schema.validate_products(
+        data.get("products"), [b.get("id") for b in data.get("beats", [])])
+
     return errs

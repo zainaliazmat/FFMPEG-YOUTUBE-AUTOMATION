@@ -44,6 +44,33 @@ def test_review_summary_includes_title_duration_and_every_source():
         assert s["claim"] in summary
 
 
+def test_review_summary_lists_products():
+    script = json.load(open("fixtures/longform_draft.json"))
+    script = ws.assemble_script(script, "demo")
+    summary = ws.review_summary(script)
+    assert "Granola" in summary and "PRODUCTS" in summary
+
+
+def test_cli_rejects_draft_with_product_beat_not_in_script():
+    # A products[] entry pointing at a non-existent beat must fail validation
+    # (the wiring's whole point: a typo can't silently mis-target capture).
+    slug = "_test_ws_badprod"
+    proj = pathlib.Path("project") / slug
+    proj.mkdir(parents=True, exist_ok=True)
+    draft = json.load(open("fixtures/longform_draft.json"))
+    draft["products"] = [{"name": "Granola", "beats": [9999]}]
+    (proj / "draft.json").write_text(json.dumps(draft))
+    try:
+        out = subprocess.run([sys.executable, str(SCRIPT), slug],
+                             capture_output=True, text=True, cwd=".")
+        payload = json.loads(out.stdout.strip().splitlines()[-1])
+        assert payload["success"] is False
+        assert any("not a body beat" in e for e in payload.get("errors", []))
+        assert not (proj / "script.json").exists()
+    finally:
+        shutil.rmtree(proj, ignore_errors=True)
+
+
 def test_cli_rejects_noncompliant_draft(tmp_path, monkeypatch):
     # A draft missing chapters/midroll/sources/pov + too-short -> rejected with errors.
     slug = "_test_ws_reject"

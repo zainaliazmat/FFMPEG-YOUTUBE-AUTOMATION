@@ -46,3 +46,38 @@ def validate_script(data):
         else:
             seen_ids.add(bid)
     return errs
+
+
+def validate_products(products, valid_beat_ids):
+    """Validate an optional ``products`` array (yt-capture input).
+
+    ``products`` is None/absent -> valid (the feature is opt-in). When present it
+    must be a list of ``{name, beats:[ids]}`` objects where each name is a
+    non-empty string and each beat id is a positive int that EXISTS as a real
+    body beat in the script (never a card id 0/-1). Returns error strings; empty
+    means valid. (autoplan eng F7: validators previously ignored this silently.)
+    """
+    if products is None:
+        return []
+    errs = []
+    if not isinstance(products, list):
+        return ["products must be an array"]
+    valid = set(valid_beat_ids)
+    for i, p in enumerate(products):
+        if not isinstance(p, dict):
+            errs.append(f"products[{i}] must be an object")
+            continue
+        if not p.get("name") or not isinstance(p.get("name"), str):
+            errs.append(f"products[{i}] missing non-empty string name")
+        beats = p.get("beats")
+        if not isinstance(beats, list) or not beats:
+            errs.append(f"products[{i}] beats must be a non-empty array")
+            continue
+        for b in beats:
+            if not _is_positive_int(b):
+                errs.append(
+                    f"products[{i}] beat {b!r} must be a positive integer")
+            elif b not in valid:
+                errs.append(
+                    f"products[{i}] beat {b} is not a body beat in this script")
+    return errs
