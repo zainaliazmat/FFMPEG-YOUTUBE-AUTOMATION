@@ -45,38 +45,45 @@ def _stage(script, slug, *extra):
     return payload, dt
 
 
-def _ffprobe(path, *streams):
+def _ffprobe(path, *entries):
+    # ffprobe wants ONE -show_entries value with sections joined by ':'
+    # (e.g. "stream=width,height:format=duration"), not separate tokens.
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", *streams, "-of", "json", path],
+        ["ffprobe", "-v", "error", "-show_entries", ":".join(entries),
+         "-of", "json", path],
         capture_output=True, text=True)
     return json.loads(out.stdout)
 
 
 @gated
 def test_longform_spine_survives_scale(capsys):
+    # Idempotent: reuse an existing render if the project already rendered (each
+    # stage skips when done). A fresh project renders the whole chain from scratch.
+    # We do NOT pass --force or wipe the dir, so re-running validates the assertions
+    # cheaply instead of paying ~37 min of CPU render again.
     proj = pathlib.Path("project") / SLUG
-    if proj.exists():
-        shutil.rmtree(proj)
     proj.mkdir(parents=True, exist_ok=True)
-    shutil.copy("fixtures/longform_draft.json", proj / "draft.json")
+    if not (proj / "draft.json").exists():
+        shutil.copy("fixtures/longform_draft.json", proj / "draft.json")
 
     timings = {}
 
-    # 0. assemble + validate the script
-    p, dt = _stage(f"{SKILLS}/yt-script/scripts/write_script.py", SLUG)
-    assert p["success"], p
-    timings["script"] = dt
+    # 0. assemble + validate the script (only if absent: write_script re-inits the
+    #    manifest, which would reset the spine's done flags and force a re-render).
+    if not (proj / "script.json").exists():
+        p, timings["script"] = _stage(f"{SKILLS}/yt-script/scripts/write_script.py", SLUG)
+        assert p["success"], p
     n_beats = len(json.loads((proj / "script.json").read_text())["beats"])
     assert 30 <= n_beats <= 40, f"expected 30-40 beats, got {n_beats}"
 
-    # 1-4. the spine
-    p, timings["voice"] = _stage(f"{SKILLS}/yt-voice/scripts/generate_voice.py", SLUG, "--force")
+    # 1-4. the spine (idempotent skip if already done)
+    p, timings["voice"] = _stage(f"{SKILLS}/yt-voice/scripts/generate_voice.py", SLUG)
     assert p["success"], p
-    p, timings["media"] = _stage(f"{SKILLS}/yt-media/scripts/fetch_media.py", SLUG, "--force")
+    p, timings["media"] = _stage(f"{SKILLS}/yt-media/scripts/fetch_media.py", SLUG)
     assert p["success"], p
-    p, timings["captions"] = _stage(f"{SKILLS}/yt-captions/scripts/generate_captions.py", SLUG, "--force")
+    p, timings["captions"] = _stage(f"{SKILLS}/yt-captions/scripts/generate_captions.py", SLUG)
     assert p["success"], p
-    p, timings["stitch"] = _stage(f"{SKILLS}/yt-stitch/scripts/stitch_video.py", SLUG, "--force", "--aspect", "16x9")
+    p, timings["stitch"] = _stage(f"{SKILLS}/yt-stitch/scripts/stitch_video.py", SLUG, "--aspect", "16x9")
     assert p["success"], f"filter_complex/render failed at scale: {p}"
 
     # locate the rendered mp4
