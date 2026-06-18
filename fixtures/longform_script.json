@@ -1,0 +1,33 @@
+{
+  "slug": "ai-tools-time-audit",
+  "title": "The 30-Minute AI Time Audit That Saves Professionals 8 Hours a Week",
+  "hook": "Most professionals waste eight hours every week on work an AI assistant could finish in minutes. Here is the exact thirty-minute audit that finds those hours and hands them back to you.",
+  "channel_pov": "The win is never the tool; it is the workflow you wrap around it. An audit beats another app.",
+  "beats": [
+    {"id": 1, "narration": "Track one ordinary workday in fifteen-minute blocks before you change anything. You are collecting evidence, not optimizing yet.", "on_screen_text": "Step 1: Track a normal day", "b_roll_keywords": ["person working laptop", "office clock"], "chapter": "The Audit"},
+    {"id": 2, "narration": "Highlight every task that is repetitive and rule-based. Same emails, summarizing documents, reformatting sheets. That pattern almost never changes, which is exactly where models are strongest.", "on_screen_text": "Step 2: Find repetitive work", "b_roll_keywords": ["spreadsheet data", "typing keyboard"], "chapter": "The Audit"},
+    {"id": 3, "narration": "Ask one question of each task. Could clear instructions produce a good-enough first draft? If yes, it is a candidate for delegation.", "on_screen_text": "Step 3: Score each task", "b_roll_keywords": ["checklist notebook", "thinking office"], "chapter": "The Audit"},
+    {"id": 4, "narration": "Build a small library of reusable prompts for your top three tasks. Treat a prompt like a recipe with role, context, format, and one example.", "on_screen_text": "Step 4: Save reusable prompts", "b_roll_keywords": ["ai interface", "laptop screen"], "chapter": "The System"},
+    {"id": 5, "narration": "Connect your tools so output has somewhere to go. A draft that lands in your inbox saves the hidden minutes of copy, paste, and reformat.", "on_screen_text": "Step 5: Connect tools", "b_roll_keywords": ["workflow automation", "connected network"], "chapter": "The System"},
+    {"id": 6, "narration": "Set a weekly ten-minute review. Keep the automations that saved time, delete the ones that created new work. Prune ruthlessly.", "on_screen_text": "Step 6: Review weekly", "b_roll_keywords": ["calendar planning", "reviewing charts"], "chapter": "The System"},
+    {"id": 7, "narration": "Do this for a month and the reclaimed hours compound into a full extra workday a week, spent on deep work instead of busywork.", "on_screen_text": "The payoff", "b_roll_keywords": ["sunrise productivity", "professional success"], "chapter": "The Payoff"}
+  ],
+  "outro": "If a thirty-minute audit found even one hour, imagine what a full system does. The people who adapt their workflow first win the decade.",
+  "cta": "Subscribe for one practical AI workflow every week.",
+  "chapters": [
+    {"title": "Intro", "start_beat": 1},
+    {"title": "The Audit", "start_beat": 1},
+    {"title": "The System", "start_beat": 4},
+    {"title": "The Payoff", "start_beat": 7}
+  ],
+  "midroll_beats": [4],
+  "sources": [
+    {"claim": "Knowledge workers spend ~28% of the week on email", "source": "McKinsey Global Institute, The social economy", "url": "https://www.mckinsey.com/", "verified": false},
+    {"claim": "LLMs excel at repetitive, pattern-stable text tasks", "source": "Stanford HAI AI Index 2024", "url": "https://aiindex.stanford.edu/", "verified": false},
+    {"claim": "Context switching imposes a measurable time cost", "source": "American Psychological Association, multitasking research", "url": "https://www.apa.org/", "verified": false},
+    {"claim": "Prompt templating reduces repeated effort", "source": "Anthropic prompt engineering guide", "url": "https://docs.anthropic.com/", "verified": false},
+    {"claim": "Workflow automation cuts manual handoff steps", "source": "Zapier State of Business Automation report", "url": "https://zapier.com/", "verified": false}
+  ],
+  "word_count": 270,
+  "estimated_duration_min": 11.4
+}
