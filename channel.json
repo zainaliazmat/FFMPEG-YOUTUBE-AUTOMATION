@@ -1,14 +1,20 @@
 {
   "name": "The Leverage Loop",
   "niche": "AI tools & productivity for professionals and business",
-  "target_audience": "Working professionals, founders, and operators (25-45) who already use a computer all day, are comfortable with software, and want concrete, defensible ways to do more with AI without buying hype. Not beginners looking for 'what is ChatGPT', and not engineers looking for model internals — practitioners who want workflow leverage.",
-  "channel_pov": "Most AI content sells novelty; we sell leverage. We argue that the win is never the tool itself but the workflow you wrap around it, and that the professionals who pull ahead are the ones who ruthlessly cut steps, not the ones who collect apps. Every video takes a clear, sometimes contrarian stance and backs it with specific, testable tradeoffs rather than feature tours.",
-  "voice": "Direct, evidence-led, and a little skeptical. Talks to a smart peer, not a student. Concrete over abstract, opinionated but honest about tradeoffs, never breathless.",
+  "target_audience": "Knowledge workers, founders, and operators deciding which AI tools are worth paying for — the buyer with a budget and a stack to defend, choosing where to spend. Not beginners looking for 'what is ChatGPT', and not engineers looking for model internals — practitioners weighing real cost against real payoff.",
+  "channel_pov": "Honest, data-backed verdicts on AI tools: which are actually worth the money, which are overhyped, and which to skip - judged on real pricing, real-user reviews, and hands-on feature comparison, with no affiliate bias.",
+  "voice": "calm, specific, slightly skeptical; concrete numbers and tradeoffs over adjectives; talks to a professional deciding where to spend, not a hype audience.",
   "target_length_min": [8, 20],
   "pacing_wpm": [130, 150],
   "wpm": 140,
   "min_sources": 5,
-  "seed_channels": [],
+  "seed_channels": [
+    "UCbY9xX3_jW5c2fjlZVBI4cg",
+    "UC5l7RouTQ60oUjLjt1Nh-UQ",
+    "UC_RovKmk0OCbuZjA8f08opw",
+    "UCIgnGlGkVRhd4qNFcEwLL4A",
+    "UCHhYXsLBEVVnbvsq57n1MTQ"
+  ],
   "authenticity_requirements": [
     "Original synthesis across multiple sources with a clear point of view — never a single-source rewrite or a feature-list read-out.",
     "Every factual claim, statistic, quote, and citation must be real and checkable; never fabricate. Sources carry verified:false until a human confirms them.",
