@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-STAGES = ("capture", "voice", "media", "captions", "stitch")
+STAGES = ("capture", "voice", "media", "motion", "captions", "stitch")
 
 
 def project_dir(slug, root="project"):

@@ -63,3 +63,9 @@ def test_set_stage_auto_inits_when_manifest_absent(tmp_path, monkeypatch):
     assert m["stages"]["voice"]["status"] == "done"
     # other known stages still present and pending
     assert m["stages"]["stitch"]["status"] == "pending"
+
+
+def test_motion_is_a_known_stage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    m = manifest.init("demo")
+    assert m["stages"]["motion"]["status"] == "pending"
