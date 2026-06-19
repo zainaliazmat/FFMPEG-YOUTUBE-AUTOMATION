@@ -220,3 +220,45 @@ def _render(slug, force=False, only=None, render_fn=None, engine_version="unset"
         manifest.set_stage(slug, "stitch", status="pending")
     return result.ok(stage="motion", rendered=len(assets), assets=assets,
                      warnings=warnings, stitch_invalidated=changed)
+
+
+def _resolve_engine_version():  # pragma: no cover - integration
+    """Resolve the pinned HyperFrames Docker image digest. Wired in Task 11."""
+    return "unset"
+
+
+def _docker_render(item, duration, out_path):  # pragma: no cover - integration
+    """Drive HyperFrames in Docker to render `item` to `out_path` at `duration`
+    seconds, muted+silent-track, video_spec size/fps/pixfmt, color/range tagged."""
+    raise NotImplementedError("wired in Task 11 / Phase-0 spike")
+
+
+def _timings_present(slug, root="project"):
+    return bool(_durations(slug, root))
+
+
+def main(argv=None):
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("slug")
+    p.add_argument("--init", action="store_true")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--only", type=int, default=None)
+    p.add_argument("--doctor", action="store_true")
+    a = p.parse_args(argv)
+    if a.doctor:
+        d = doctor()
+        env = result.ok(**d) if d["ok"] else result.err(d["next_action"], **d)
+        result.run(lambda: env, a.slug)
+        return 0 if d["ok"] else 1
+    if a.init:
+        result.run(lambda: _init(a.slug), a.slug)
+        return 0
+    r = result.run(lambda: _render(a.slug, force=a.force, only=a.only,
+                                   render_fn=_docker_render,
+                                   engine_version=_resolve_engine_version()), a.slug)
+    return 0 if r.get("success") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

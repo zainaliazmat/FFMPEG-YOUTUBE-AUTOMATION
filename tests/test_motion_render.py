@@ -155,3 +155,39 @@ def test_render_retries_then_falls_back_to_broll(tmp_path, monkeypatch):
     assert n["c"] == 2                                 # retried before giving up
     assert r["success"] is True and r["assets"] == []
     assert any(w["code"] == mr.ERR_RENDER_FAILED for w in r["warnings"])
+
+
+def test_normal_run_skips_unchanged_but_force_rerenders(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 6.0})
+    _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
+                  "data": {"title": "t"}, "confirmed": True}])
+    n = {"c": 0}
+    def fake(item, dur, out_path):
+        n["c"] += 1; (d / out_path).write_bytes(b"\x00")
+    mr._render("proj", render_fn=fake)
+    mr._render("proj", force=False, render_fn=fake)   # unchanged -> cached
+    assert n["c"] == 1
+    mr._render("proj", force=True, render_fn=fake)    # force -> re-render
+    assert n["c"] == 2
+
+
+def test_only_renders_single_beat(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 6.0})
+    _confirm(d, [
+        {"beat": 8, "kind": "card", "template": "card/chapter", "data": {"title": "P"}, "confirmed": True},
+        {"beat": -1, "kind": "card", "template": "card/outro", "data": {"title": "t"}, "confirmed": True}])
+    rendered = []
+    mr._render("proj", force=True, only=-1,
+               render_fn=lambda i, dur, o: (rendered.append(i["beat"]),
+                                            (d / o).write_bytes(b"\x00")))
+    assert rendered == [-1]
+
+
+def test_doctor_cli_exits_nonzero_when_missing(monkeypatch, capsys):
+    monkeypatch.setattr(mr.shutil, "which", lambda t: None)  # everything missing
+    rc = mr.main(["proj", "--doctor"])
+    assert rc != 0
