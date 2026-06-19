@@ -70,3 +70,29 @@ def test_valid_unique_positive_ids_pass():
         {"id": 2, "narration": "b", "b_roll_keywords": ["k"]},
     ]))
     assert errs == []
+
+
+def test_validate_motion_absent_is_valid():
+    assert schema.validate_motion(None, {-1, 0, 8}) == []
+
+
+def test_validate_motion_good_card_items():
+    m = [
+        {"beat": -1, "kind": "card", "template": "card/outro", "confirmed": False},
+        {"beat": 8, "kind": "card", "template": "card/chapter", "confirmed": True},
+    ]
+    assert schema.validate_motion(m, {-1, 0, 8}) == []
+
+
+def test_validate_motion_rejects_nonbool_confirmed():
+    m = [{"beat": 8, "kind": "card", "template": "card/chapter", "confirmed": "true"}]
+    errs = schema.validate_motion(m, {8})
+    assert any("confirmed must be a boolean" in e for e in errs)
+
+
+def test_validate_motion_rejects_bad_kind_beat_and_template():
+    m = [{"beat": 99, "kind": "explode", "template": "", "confirmed": False}]
+    errs = schema.validate_motion(m, {8})
+    assert any("kind" in e for e in errs)
+    assert any("beat 99" in e for e in errs)
+    assert any("template" in e for e in errs)

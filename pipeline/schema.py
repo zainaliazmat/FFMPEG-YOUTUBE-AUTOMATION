@@ -81,3 +81,33 @@ def validate_products(products, valid_beat_ids):
                 errs.append(
                     f"products[{i}] beat {b} is not a body beat in this script")
     return errs
+
+
+_MOTION_KINDS = ("card", "overlay", "beat")
+
+
+def validate_motion(motion, valid_card_beats):
+    """Validate a motion.json plan (yt-motion input). None/absent -> valid.
+    valid_card_beats is the set of placeable ids the caller allows (chapter
+    start_beats plus {-1}). confirmed MUST be a real bool so the strict is-True
+    render gate can't be fooled by 'true'/1."""
+    if motion is None:
+        return []
+    errs = []
+    if not isinstance(motion, list):
+        return ["motion must be an array"]
+    valid = set(valid_card_beats)
+    for i, item in enumerate(motion):
+        if not isinstance(item, dict):
+            errs.append(f"motion[{i}] must be an object")
+            continue
+        b = item.get("beat")
+        if not (isinstance(b, int) and not isinstance(b, bool)) or b not in valid:
+            errs.append(f"motion[{i}] beat {b!r} is not a placeable card position")
+        if item.get("kind") not in _MOTION_KINDS:
+            errs.append(f"motion[{i}] kind must be one of {_MOTION_KINDS}")
+        if not item.get("template") or not isinstance(item.get("template"), str):
+            errs.append(f"motion[{i}] missing non-empty string template")
+        if not isinstance(item.get("confirmed"), bool):
+            errs.append(f"motion[{i}] confirmed must be a boolean")
+    return errs
