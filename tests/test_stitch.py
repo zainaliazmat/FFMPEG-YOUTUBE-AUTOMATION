@@ -136,6 +136,43 @@ def test_plan_segments_routes_product_framing_and_floors_missing_beats(tmp_path,
     assert "5" in str(e.value)
 
 
+def test_logo_segment_fades_in_and_zooms():
+    segs = [{"id": 4, "kind": "logo", "duration": 1.8, "path": "media/logo_card.png"}]
+    cmd = sv.build_command(segs, None, "c.ass", "out/v.mp4", "16x9")
+    fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "fade=t=in:st=0:d=0.6" in fc      # reveal
+    assert "zoompan=z='min(zoom+0.0012,1.10)'" in fc  # gentle grow
+    assert "media/logo_card.png" in cmd
+
+
+@needs_ffmpeg
+def test_plan_segments_splits_first_product_mention_with_logo(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manifest = __import__("pipeline.manifest", fromlist=["manifest"])
+    d = manifest.project_dir("proj")
+    # a real transparent logo so _logo_card's ffmpeg overlay succeeds
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+                    "color=c=red:s=200x80,format=rgba", "-frames:v", "1",
+                    str(d / "media" / "logo_granola.png")], check=True, capture_output=True)
+    (d / "media" / "product_granola.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    script = {"hook": "h", "outro": "o"}
+    timings = [
+        {"id": 0, "start": 0.0, "end": 1.0},
+        {"id": 4, "start": 1.0, "end": 11.0},   # Granola first mention -> split
+        {"id": 6, "start": 11.0, "end": 21.0},  # Granola again -> NO logo
+        {"id": -1, "start": 21.0, "end": 22.0},
+    ]
+    a = {"path": "media/product_granola.png", "framing": "pip",
+         "product": "Granola", "logo": "media/logo_granola.png"}
+    by_beat = {4: {"beat": 4, **a}, 6: {"beat": 6, **a}}
+    segs = sv.plan_segments("proj", "16x9", script, timings, by_beat)
+    beat4 = [s for s in segs if s["id"] == 4]
+    beat6 = [s for s in segs if s["id"] == 6]
+    assert [s["kind"] for s in beat4] == ["logo", "product"]      # split
+    assert abs(sum(s["duration"] for s in beat4) - 10.0) < 0.01   # sums to beat dur
+    assert [s["kind"] for s in beat6] == ["product"]              # reveal once only
+
+
 # --------------------------------------------------------------- real renders
 
 def _ffprobe_duration(path):
@@ -275,6 +312,30 @@ def test_render_product_pip_is_valid_and_correct_dims(tmp_path):
         capture_output=True, text=True).stdout.strip()
     assert info == "1920,1080,yuv420p"
     assert abs(_ffprobe_duration(d / "out" / "pip.mp4") - 2.0) < 0.15
+
+
+@needs_ffmpeg
+def test_render_logo_reveal_valid(tmp_path):
+    # logo card -> reveal segment renders to a valid full-frame clip
+    d = _project(tmp_path)
+    _make_wav(d / "audio" / "voiceover.wav", 3.0)
+    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+                    "color=c=red:s=200x80,format=rgba", "-frames:v", "1",
+                    str(d / "media" / "logo.png")], check=True, capture_output=True)
+    card = sv._logo_card("media/logo.png", "16x9", d)
+    assert card and (d / card).exists()
+    _make_video(d / "media" / "beat_1.mp4", 2.0, "blue")
+    (d / "cap.ass").write_text(_ass("x"))
+    segs = [
+        {"id": 1, "kind": "logo", "duration": 1.0, "path": card},
+        {"id": 1, "kind": "video", "duration": 2.0, "path": "media/beat_1.mp4"},
+    ]
+    sv.run_ffmpeg(sv.build_command(segs, None, "cap.ass", "out/logo.mp4", "16x9"), cwd=d)
+    info = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=width,height", "-of", "csv=p=0", str(d / "out" / "logo.mp4")],
+        capture_output=True, text=True).stdout.strip()
+    assert info == "1920,1080"
 
 
 @needs_ffmpeg

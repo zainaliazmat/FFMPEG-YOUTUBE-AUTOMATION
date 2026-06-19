@@ -109,6 +109,25 @@ def test_capture_one_missing_image_raises_typed(tmp_path):
     assert e.value.code == cap.ERR_BAD_IMAGE
 
 
+def test_capture_one_records_provided_logo(tmp_path):
+    img = tmp_path / "site.png"; img.write_bytes(PNG_SIG + b"site")
+    logo = tmp_path / "logo.png"; logo.write_bytes(PNG_SIG + b"logo")
+    (tmp_path / "media").mkdir()
+    asset = cap.capture_one(
+        {"name": "Granola", "beats": [4], "image": str(img), "logo": str(logo)},
+        tmp_path / "media", tmp_path)
+    assert asset["logo"] == "media/logo_granola.png"
+    assert (tmp_path / asset["logo"]).read_bytes().startswith(PNG_SIG)
+
+
+def test_capture_one_logo_none_when_absent(tmp_path):
+    img = tmp_path / "site.png"; img.write_bytes(PNG_SIG + b"site")
+    (tmp_path / "media").mkdir()
+    asset = cap.capture_one(
+        {"name": "Otter", "beats": [4], "image": str(img)}, tmp_path / "media", tmp_path)
+    assert asset["logo"] is None
+
+
 def test_capture_one_no_source_raises_typed(tmp_path):
     (tmp_path / "media").mkdir()
     with pytest.raises(cap.CaptureError) as e:

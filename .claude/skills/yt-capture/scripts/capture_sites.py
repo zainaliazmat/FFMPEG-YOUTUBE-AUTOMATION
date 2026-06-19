@@ -50,6 +50,34 @@ ERR_BAD_IMAGE = "no_usable_image"
 
 VIEWPORT = {"width": 1920, "height": 1080}
 DEVICE_SCALE = 2
+# Find the official logo IN the page (authoritative + crisp — far better
+# provenance/quality than scraping a random copy off image search). Constrained
+# to the top header strip (top < 220px) and a denylist that rejects the common
+# false positives a naive selector grabs: G2/Capterra review badges, award
+# ribbons, and hero illustrations. Returns the source asset to re-render.
+_FIND_LOGO_JS = r"""() => {
+  const deny = /badge|g2crowd|\bg2\b|capterra|trustpilot|award|review|rating|stars?|press|partner|client|testimonial|hero|illustration|screenshot|avatar/i;
+  const sels = ["header a[href] img","header a[href] svg","nav a[href] img",
+    "nav a[href] svg","[class*=logo i] img","[class*=logo i] svg",
+    "header img","header svg"];
+  for (const s of sels) {
+    for (const el of document.querySelectorAll(s)) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 12 || r.top > 220 || r.left > 600) continue;
+      const meta = [el.getAttribute('alt'), el.getAttribute('src'),
+        el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className,
+        el.getAttribute('aria-label')].join(' ');
+      if (deny.test(meta)) continue;
+      if (el.tagName.toLowerCase() === 'img') {
+        const src = el.currentSrc || el.src || el.getAttribute('data-src') || '';
+        if (src) return {type:'img', src};
+      } else {
+        return {type:'svg', html: el.outerHTML};
+      }
+    }
+  }
+  return null;
+}"""
 MAX_PNG_BYTES = 25_000_000          # a 1920x1080@2x PNG is well under this
 CONSENT_SELECTORS = (               # hardcoded constants only — never from products.json
     "button#onetrust-accept-btn-handler",
@@ -188,8 +216,66 @@ def _download_image(url, dest):
                 f.write(chunk)
 
 
-def _screenshot(url, dest):
-    """Headless Playwright viewport still. SSRF-checked. Optional dependency."""
+def _render_logo(context, inner_html, logo_dest):
+    """Render logo markup on a TRANSPARENT page and screenshot it big + crisp.
+    Re-rendering (vs screenshotting the live element) drops the opaque white
+    header behind real-site logos and upscales the asset cleanly. Returns True
+    on a non-trivial result."""
+    p = None
+    try:
+        p = context.new_page()
+        p.set_content(
+            '<body style="margin:0;padding:0;background:transparent">'
+            f'<div style="display:inline-block">{inner_html}</div></body>',
+            wait_until="load")
+        el = p.locator("img, svg").first
+        el.wait_for(state="visible", timeout=4000)
+        # force a big render so the reveal is sharp
+        el.evaluate("e => { e.style.width='1200px'; e.style.height='auto'; }")
+        p.wait_for_timeout(250)
+        box = el.bounding_box()
+        if not box or box["width"] < 40 or box["height"] < 12:
+            return False
+        el.screenshot(path=str(logo_dest), omit_background=True)
+        return True
+    except Exception:  # noqa: BLE001 - asset didn't load; caller falls back
+        return False
+    finally:
+        if p:
+            try:
+                p.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _extract_logo(page, logo_dest):
+    """Best-effort official-logo grab. Finds the header logo (excluding badges /
+    awards / hero art), then re-renders its SOURCE asset transparent so the
+    opaque header background is dropped. Returns True on success. Never raises."""
+    try:
+        found = page.evaluate(_FIND_LOGO_JS)
+    except Exception:  # noqa: BLE001
+        return False
+    if not found:
+        return False
+    ctx = page.context
+    try:
+        if found["type"] == "img":
+            src = found["src"]
+            if src.startswith("data:"):
+                return _render_logo(ctx, f'<img src="{src}">', logo_dest)
+            if src.startswith("https://"):
+                ok, _ = urlsafe.is_safe_capture_url(src)
+                return bool(ok) and _render_logo(ctx, f'<img src="{src}">', logo_dest)
+            return False
+        return _render_logo(ctx, found["html"], logo_dest)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _screenshot(url, dest, logo_dest=None):
+    """Headless Playwright viewport still (+ optional logo). SSRF-checked.
+    Returns True if a logo was also captured into ``logo_dest``."""
     ok, reason = urlsafe.is_safe_capture_url(url)
     if not ok:
         raise CaptureError(ERR_UNSAFE_URL, f"{url}: {reason}")
@@ -232,8 +318,10 @@ def _screenshot(url, dest):
             # JS only — never sourced from products.json.
             page.evaluate(_HIDE_CONSENT_JS)
             page.wait_for_timeout(200)
+            got_logo = _extract_logo(page, logo_dest) if logo_dest else False
             page.screenshot(path=str(dest))
             browser.close()
+            return got_logo
     except CaptureError:
         raise
     except Exception as exc:  # noqa: BLE001 - any nav/anti-bot failure -> fallback
@@ -254,9 +342,11 @@ def capture_one(product, media_dir, project_dir):
     name = product["name"]
     fname = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "product"
     dest = Path(media_dir) / f"product_{fname}.png"
+    logo_dest = Path(media_dir) / f"logo_{fname}.png"
     if mode == "none":
         raise CaptureError(ERR_MISSING_SOURCE,
                            f"{name}: no image, press_kit, or url to capture")
+    logo_ok = False
     if mode == "image":
         src = Path(value)
         if not src.is_file():
@@ -266,11 +356,11 @@ def capture_one(product, media_dir, project_dir):
     elif mode == "press_kit":
         _download_image(value, dest)
         source_url = value
-    else:  # playwright over pages -> first that succeeds
+    else:  # playwright over pages -> first that succeeds (also grabs the logo)
         last = None
         for url in value:
             try:
-                _screenshot(url, dest)
+                logo_ok = _screenshot(url, dest, logo_dest)
                 source_url = url
                 break
             except CaptureError as e:
@@ -280,9 +370,23 @@ def capture_one(product, media_dir, project_dir):
     if not _validate_png(dest):
         Path(dest).unlink(missing_ok=True)
         raise CaptureError(ERR_BAD_IMAGE, f"{name}: captured file is not a PNG")
+
+    # Logo: prefer an auto-extracted one; else a human-provided products.json
+    # `logo` (local path). None -> the beat just shows the website PiP (no reveal).
+    logo_rel = None
+    if logo_ok and _validate_png(logo_dest):
+        logo_rel = str(logo_dest.relative_to(project_dir))
+    elif product.get("logo"):
+        lp = Path(product["logo"])
+        if lp.is_file():
+            logo_dest.write_bytes(lp.read_bytes())
+            if _validate_png(logo_dest):
+                logo_rel = str(logo_dest.relative_to(project_dir))
+
     return {
         "beats": product.get("beats", []),
         "path": str(dest.relative_to(project_dir)),
+        "logo": logo_rel,          # transparent logo PNG, or None
         "product": name,
         "source_url": source_url,
         "source": mode,

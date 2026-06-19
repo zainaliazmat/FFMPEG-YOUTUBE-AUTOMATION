@@ -52,8 +52,17 @@ domain never gets silently recorded. Capture **refuses** if nothing is confirmed
 | `pages` | optional extra pages to capture (homepage / pricing / feature) so one logo doesn't repeat |
 | `press_kit` | optional official brand/press-kit image **URL** (https) — licensed-by-intent, stable |
 | `image` | optional **local path** to a hand-picked PNG/JPG you already have |
+| `logo` | optional **local path** to a transparent logo PNG; overrides auto-extraction |
 | `beats` | the body-beat ids that mention this product |
 | `confirmed` | set `true` ONLY after you verify the source |
+
+### Logo reveal
+On a product's **first** mention, `yt-stitch` plays a short animated logo reveal
+(fade + grow) before the website PiP. The logo is grabbed automatically from the
+official site (the header logo, re-rendered transparent). Auto-extraction is
+best-effort — it **declines rather than guess** when a site's logo isn't cleanly
+identifiable, so some products get no reveal. To force a clean logo, set the
+`logo` field to a transparent PNG. No logo → the beat just shows the website PiP.
 
 **Resolution precedence:** `image` > `press_kit` > Playwright over `pages`/`url`.
 All URLs (press-kit and Playwright) are SSRF-checked (`pipeline.urlsafe`): https

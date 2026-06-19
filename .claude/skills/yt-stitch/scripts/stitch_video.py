@@ -30,6 +30,10 @@ CARD_BG = "0x0b1a2a"
 # lever). It is composited as picture-in-picture on the branded card at this scale.
 PIP_SCALE = 0.72
 IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+# Logo reveal shown before the website PiP, on a product's FIRST mention only.
+LOGO_INTRO_SEC = 1.8          # length of the reveal
+LOGO_MIN_BEAT_SEC = 3.0       # don't split beats shorter than this
+LOGO_BOX = (0.50, 0.35)       # logo fits within this fraction of (w, h), centered
 
 # A bold system font for title cards (verified present on the build box).
 _FONT_CANDIDATES = (
@@ -68,6 +72,27 @@ def pip_inner_dims(aspect, scale=PIP_SCALE):
     return (round(w * scale) // 2) * 2, (round(h * scale) // 2) * 2
 
 
+def _logo_card(logo_rel, aspect, project_dir):
+    """Composite the transparent logo centered on the branded card -> an opaque
+    PNG the logo segment animates. Cached per (logo, aspect). Returns the card's
+    path relative to project_dir, or None if compositing fails (skip the reveal)."""
+    w, h = DIMS[aspect]
+    src = Path(project_dir) / logo_rel
+    out = src.with_name(f"{src.stem}_card_{aspect}.png")
+    if not out.exists():
+        box_w = (round(w * LOGO_BOX[0]) // 2) * 2
+        box_h = (round(h * LOGO_BOX[1]) // 2) * 2
+        cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c={CARD_BG}:s={w}x{h}",
+               "-i", str(src), "-filter_complex",
+               f"[1]scale={box_w}:{box_h}:force_original_aspect_ratio=decrease[lg];"
+               f"[0][lg]overlay=(W-w)/2:(H-h)/2",
+               "-frames:v", "1", str(out)]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0 or not out.exists():
+            return None
+    return str(out.relative_to(project_dir))
+
+
 def _escape_ass_path(path):
     # Escape for use inside a single-quoted ass= filter argument.
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
@@ -94,6 +119,18 @@ def _segment_input_and_filter(seg, idx, aspect, fps):
         # Single still frame (no -loop / -t); zoompan d= fixes frame count (C2).
         inp = ["-i", seg["path"]]
         chain = (f"[{idx}:v]scale={w * 2}:-2,{zoompan_clause(dur, aspect, fps)},"
+                 f"setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]")
+        return inp, chain
+
+    if kind == "logo":
+        # Opaque logo-on-card still: fade up from black + a gentle grow = a clean
+        # reveal before the website PiP. zoompan d= fixes the frame count (C2).
+        inp = ["-i", seg["path"]]
+        frames = int(round(dur * fps))
+        chain = (f"[{idx}:v]scale={w * 2}:-2,"
+                 f"zoompan=z='min(zoom+0.0012,1.10)':d={frames}:"
+                 f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps={fps},"
+                 f"fade=t=in:st=0:d=0.6,"
                  f"setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]")
         return inp, chain
 
@@ -200,6 +237,7 @@ def plan_segments(slug, aspect, script, timings, by_beat):
             f"stock or product asset before stitch (a capture_failed beat must "
             f"fall back to stock b-roll)")
     segments = []
+    logo_shown = set()   # logo reveal plays once per product (first mention)
     for t in timings:
         dur = round(t["end"] - t["start"], 3)
         if t["id"] == 0:
@@ -223,6 +261,22 @@ def plan_segments(slug, aspect, script, timings, by_beat):
             kind = "image"     # stock photo -> full-bleed Ken Burns
         else:
             kind = "video"
+
+        # First time a product appears (with a logo), prepend a logo reveal that
+        # eats the front of this beat; the website PiP fills the rest. Same total
+        # duration, so audio stays in sync.
+        prod, logo = asset.get("product"), asset.get("logo")
+        if (kind == "product" and logo and prod and prod not in logo_shown
+                and dur >= LOGO_MIN_BEAT_SEC):
+            card = _logo_card(logo, aspect, d)
+            if card:
+                logo_shown.add(prod)
+                intro = round(min(LOGO_INTRO_SEC, dur * 0.35), 3)
+                segments.append({"id": t["id"], "kind": "logo",
+                                 "duration": intro, "path": card})
+                segments.append({"id": t["id"], "kind": "product",
+                                 "duration": round(dur - intro, 3), "path": path})
+                continue
         segments.append({"id": t["id"], "kind": kind, "duration": dur, "path": path})
     return segments
 

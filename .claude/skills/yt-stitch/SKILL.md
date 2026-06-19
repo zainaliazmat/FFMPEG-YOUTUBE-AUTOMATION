@@ -30,6 +30,10 @@ rendering; a missing one fails fast with the beat list, not deep inside ffmpeg.
   full-frame pan. This is the always-on *Bill Graham* reduced-size lever — the repo's
   only copyright-framing enforcement point. It applies ONLY to product stills; stock
   b-roll still fills the frame. See `RIGHTS.md`.
+- **Logo reveal (first mention).** When a product asset carries a `logo`, the first
+  beat that product appears in is split into a short logo reveal (fade + gentle grow
+  on the branded card) followed by the website PiP, summing to the same beat duration
+  so audio stays in sync. Later mentions of the same product skip the reveal.
 - **Voice is never dropped.** With music, the voice is `asplit` — one copy keys a
   `sidechaincompress` that ducks the music, the other is `amix`ed back in
   (`normalize=0`, so the voice stays at full level). With no music the voice is
