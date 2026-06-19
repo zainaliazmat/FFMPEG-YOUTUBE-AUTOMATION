@@ -64,3 +64,44 @@ def comp_key(item, duration, template_bytes, tokens_bytes, engine_version):
     h.update(template_bytes or b"")
     h.update(tokens_bytes or b"")
     return h.hexdigest()
+
+
+from pipeline import manifest, result, schema  # noqa: E402
+import brand  # noqa: E402
+
+
+def _load_script(slug, root):
+    return json.loads((manifest.project_dir(slug, root) / "script.json").read_text())
+
+
+def card_positions(script):
+    # Only positions _render can actually place: chapter starts + the outro.
+    # (Hook id 0 is excluded by policy; a non-chapter body beat is unplaceable
+    # and validation rejects it up front rather than dropping it at render.)
+    return {ch["start_beat"] for ch in script.get("chapters", [])} | {-1}
+
+
+def proposed_motion_json(script):
+    out = [{"beat": ch["start_beat"], "kind": "card", "template": "card/chapter",
+            "data": {"title": ch.get("title")}, "confirmed": False}
+           for ch in script.get("chapters", [])]
+    out.append({"beat": -1, "kind": "card", "template": "card/outro",
+                "data": {"title": script.get("title")}, "confirmed": False})
+    return out
+
+
+def _init(slug, root="project"):
+    script = _load_script(slug, root)
+    d = manifest.project_dir(slug, root)
+    (d / "motion.json").write_text(json.dumps(proposed_motion_json(script), indent=2))
+    brand.generate(slug, root)
+    return result.ok(stage="motion",
+                     next_action=f"review {d / 'motion.json'}, set confirmed:true, "
+                                 f"then run motion_render.py {slug}")
+
+
+def validate_plan(slug, root="project"):
+    script = _load_script(slug, root)
+    pj = manifest.project_dir(slug, root) / "motion.json"
+    motion = json.loads(pj.read_text()) if pj.exists() else None
+    return schema.validate_motion(motion, card_positions(script))
