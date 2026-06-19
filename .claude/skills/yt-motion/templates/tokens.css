@@ -2,7 +2,9 @@
    "motion confirms, it doesn't sell." */
 :root {
   --bg: #0b1a2a;          /* existing CARD_BG */
-  --accent: #38bdf8;
+  --accent: #5e96a8;      /* muted steel-teal — kept quiet so --verdict owns the payoff.
+                             PROVISIONAL (range ~#5e96a8–#6fa0b3): eye-lock at Task 11
+                             against the bt709/tv-tagged render, not a browser swatch. */
   --verdict: #f5b700;     /* the one "verdict" semantic color */
   --ink: #ffffff;
   --muted: #93a4b3;
