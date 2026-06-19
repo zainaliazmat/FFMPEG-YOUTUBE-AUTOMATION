@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from pipeline import manifest
 import motion_render as mr
 
@@ -56,3 +57,101 @@ def test_validate_plan_flags_bad_beat(tmp_path, monkeypatch):
         [{"beat": 999, "kind": "card", "template": "card/chapter", "confirmed": True}]))
     errs = mr.validate_plan("proj")
     assert any("999" in e for e in errs)
+
+
+def _confirm(d, items):
+    (d / "motion.json").write_text(json.dumps(items))
+
+
+def _voice_done(slug, timings):
+    manifest.set_stage(slug, "voice", status="done",
+                       beat_timings=[{"id": k, "start": 0.0, "end": v}
+                                     for k, v in timings.items()])
+
+
+def _templates_present():
+    base = Path(__file__).resolve().parent.parent / ".claude/skills/yt-motion/templates/card"
+    base.mkdir(parents=True, exist_ok=True)
+    for n in ("chapter.html", "outro.html"):
+        p = base / n
+        if not p.exists():
+            p.write_text("<html><body><h1></h1></body></html>")
+
+
+def test_render_requires_voice_timings(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
+                  "data": {"title": "t"}, "confirmed": True}])
+    r = mr._render("proj", render_fn=lambda *a: None)
+    assert r["success"] is False and r["error_code"] == mr.ERR_NO_TIMINGS
+
+
+def test_render_refuses_unconfirmed_stays_pending(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 6.0})
+    mr._init("proj")  # all confirmed:false
+    r = mr._render("proj", render_fn=lambda *a: None)
+    assert r["success"] is False and r["error_code"] == mr.ERR_UNCONFIRMED
+    assert manifest.stage_done("proj", "motion") is False
+
+
+def test_render_outro_card_uses_injected_renderer_and_persists_engine_version(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 6.0})
+    manifest.set_stage("proj", "stitch", status="done")
+    _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
+                  "data": {"title": "t"}, "confirmed": True}])
+    calls = []
+    def fake(item, dur, out_path):
+        calls.append((item["beat"], dur)); (d / out_path).write_bytes(b"\x00")
+    r = mr._render("proj", render_fn=fake, engine_version="hf@sha256:abc")
+    assert r["success"] is True and r["rendered"] == 1
+    assert calls == [(-1, 6.0)]                       # outro fills its 6s segment
+    assert manifest.load("proj")["stages"]["motion"]["engine_version"] == "hf@sha256:abc"
+    assert manifest.stage_done("proj", "stitch") is False   # invalidated (changed)
+
+
+def test_render_long_outro_fills_full_window_not_clamped(tmp_path, monkeypatch):
+    # Bug-1 regression: a 15s outro must render a 15s MP4 (== the stitch segment),
+    # not an 8s clamp that would freeze for 7s.
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 15.0})
+    _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
+                  "data": {"title": "t"}, "confirmed": True}])
+    seen = []
+    def fake(item, dur, out_path):
+        seen.append(dur); (d / out_path).write_bytes(b"\x00")
+    r = mr._render("proj", render_fn=fake)
+    assert seen == [15.0]                              # full window, not 8.0
+    assert r["assets"][0]["duration"] == 15.0
+    assert any(w["code"] == "motion_card_long" for w in r["warnings"])
+
+
+def test_render_chapter_too_short_skips_to_broll(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 4.0, -1: 6.0})            # beat 8 too short for 3s flash + footage
+    _confirm(d, [{"beat": 8, "kind": "card", "template": "card/chapter",
+                  "data": {"title": "Pricing"}, "confirmed": True}])
+    r = mr._render("proj", render_fn=lambda *a: None)
+    assert r["success"] is True and r["rendered"] == 0
+    assert any(w["code"] == mr.ERR_UNFITTABLE for w in r["warnings"])
+
+
+def test_render_retries_then_falls_back_to_broll(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path); _templates_present()
+    d = manifest.project_dir("proj"); _script(d)
+    _voice_done("proj", {8: 11.0, -1: 6.0})
+    _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
+                  "data": {"title": "t"}, "confirmed": True}])
+    n = {"c": 0}
+    def boom(*a):
+        n["c"] += 1; raise RuntimeError("chrome crashed")
+    r = mr._render("proj", render_fn=boom, attempts=2)
+    assert n["c"] == 2                                 # retried before giving up
+    assert r["success"] is True and r["assets"] == []
+    assert any(w["code"] == mr.ERR_RENDER_FAILED for w in r["warnings"])
