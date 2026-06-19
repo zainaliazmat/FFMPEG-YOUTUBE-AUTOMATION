@@ -57,6 +57,30 @@ CONSENT_SELECTORS = (               # hardcoded constants only — never from pr
     "button[aria-label='Reject all']",
     "text=Accept all", "text=Reject all", "text=Accept",
 )
+# Fallback consent killer: remove known CMP containers, then any fixed/sticky
+# overlay whose text mentions cookies/consent. Scoped to fixed/sticky so real
+# page content is left alone. Hardcoded — never sourced from products.json.
+_HIDE_CONSENT_JS = """() => {
+  ['#onetrust-consent-sdk','#onetrust-banner-sdk','#CybotCookiebotDialog',
+   '.cky-consent-container','.cky-overlay','#usercentrics-root',
+   '#cookiescript_injected','#cookie-banner','#cookie-consent'
+  ].forEach(s => document.querySelectorAll(s).forEach(e => e.remove()));
+  const cookieish = s => /cookie|consent|gdpr/i.test(s || '');
+  // role=dialog / aria-modal cookie modals (covers custom non-CMP modals).
+  document.querySelectorAll('[role=dialog],[aria-modal=true]').forEach(el => {
+    if (cookieish(el.textContent)) el.remove();
+  });
+  // Any positioned (non-static) overlay whose OWN text is short and cookie-ish:
+  // find the smallest such element and remove its positioned ancestor.
+  document.querySelectorAll('div,section,aside').forEach(el => {
+    const cs = getComputedStyle(el);
+    const t = (el.textContent || '');
+    if (cs.position !== 'static' && t.length < 1200 && cookieish(t)
+        && /accept|reject|agree|allow|preferences/i.test(t)) {
+      el.remove();
+    }
+  });
+}"""
 _STOPWORDS = {
     "The", "This", "That", "These", "Those", "And", "But", "For", "First",
     "Next", "Then", "Now", "Today", "Here", "There", "When", "What", "Why",
@@ -180,14 +204,34 @@ def _screenshot(url, dest):
             browser = pw.chromium.launch()
             page = browser.new_context(
                 viewport=VIEWPORT, device_scale_factor=DEVICE_SCALE).new_page()
-            page.goto(url, wait_until="networkidle", timeout=45000)
+            # `load` is reliable; `networkidle` hangs on sites with persistent
+            # connections (analytics/websockets) — Playwright discourages it. We
+            # wait for `load`, then best-effort networkidle with a SHORT cap so a
+            # chatty site never burns the full timeout (real-test fix: otter.ai).
+            page.goto(url, wait_until="load", timeout=45000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=6000)
+            except Exception:  # noqa: BLE001 - chatty site; proceed anyway
+                pass
+            # Settle FIRST so the consent banner has actually rendered, THEN try to
+            # dismiss it (running the loop immediately after goto missed late
+            # banners — real-test fix: the granola.ai cookie modal got captured).
+            page.wait_for_timeout(1200)
             for sel in CONSENT_SELECTORS:
                 try:
                     page.locator(sel).first.click(timeout=1500)
+                    page.wait_for_timeout(400)
                     break
                 except Exception:  # noqa: BLE001 - banner may be absent
                     continue
-            page.wait_for_timeout(500)
+            # ALWAYS run the consent killer, even if a click "succeeded": per-site
+            # consent UIs vary too much for a click list alone, and a click can
+            # match the wrong element (real test: a click succeeded but granola.ai's
+            # custom modal + otter.ai's bottom bar survived). Hide known CMP
+            # containers + cookie dialogs + positioned cookie overlays. Hardcoded
+            # JS only — never sourced from products.json.
+            page.evaluate(_HIDE_CONSENT_JS)
+            page.wait_for_timeout(200)
             page.screenshot(path=str(dest))
             browser.close()
     except CaptureError:
