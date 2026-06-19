@@ -33,7 +33,6 @@ IMG_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 # Logo reveal shown before the website PiP, on a product's FIRST mention only.
 LOGO_INTRO_SEC = 1.8          # length of the reveal
 LOGO_MIN_BEAT_SEC = 3.0       # don't split beats shorter than this
-LOGO_BOX = (0.50, 0.35)       # logo fits within this fraction of (w, h), centered
 
 # A bold system font for title cards (verified present on the build box).
 _FONT_CANDIDATES = (
@@ -73,20 +72,31 @@ def pip_inner_dims(aspect, scale=PIP_SCALE):
 
 
 def _logo_card(logo_rel, aspect, project_dir):
-    """Composite the transparent logo centered on the branded card -> an opaque
-    PNG the logo segment animates. Cached per (logo, aspect). Returns the card's
-    path relative to project_dir, or None if compositing fails (skip the reveal)."""
+    """Composite the transparent logo onto a white rounded chip, centered on the
+    branded navy card -> an opaque PNG the logo segment animates. The white chip
+    gives any logo color (incl. dark/black marks) contrast on the dark card.
+    Cached per (logo, aspect). Returns the card path relative to project_dir, or
+    None if compositing fails (skip the reveal)."""
     w, h = DIMS[aspect]
     src = Path(project_dir) / logo_rel
     out = src.with_name(f"{src.stem}_card_{aspect}.png")
     if not out.exists():
-        box_w = (round(w * LOGO_BOX[0]) // 2) * 2
-        box_h = (round(h * LOGO_BOX[1]) // 2) * 2
-        cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c={CARD_BG}:s={w}x{h}",
-               "-i", str(src), "-filter_complex",
-               f"[1]scale={box_w}:{box_h}:force_original_aspect_ratio=decrease[lg];"
-               f"[0][lg]overlay=(W-w)/2:(H-h)/2",
-               "-frames:v", "1", str(out)]
+        cw = (round(w * 0.60) // 2) * 2      # chip size
+        ch = (round(h * 0.42) // 2) * 2
+        pad, r = 64, 40                       # inner padding, corner radius
+        lw, lh = cw - 2 * pad, ch - 2 * pad   # logo fits within the chip
+        # geq rounded-corner alpha: transparent only beyond the corner arc radius.
+        # Commas inside the geq expression must be escaped for the filtergraph.
+        a = (f"255*(1-(gt(abs(X-{cw}/2)\\,{cw}/2-{r})*gt(abs(Y-{ch}/2)\\,{ch}/2-{r})*"
+             f"gt(hypot(abs(X-{cw}/2)-({cw}/2-{r})\\,abs(Y-{ch}/2)-({ch}/2-{r}))\\,{r})))")
+        fc = (f"[1]format=rgba,geq=r=255:g=255:b=255:a='{a}'[chip];"
+              f"[2]scale={lw}:{lh}:force_original_aspect_ratio=decrease[lg];"
+              f"[chip][lg]overlay=(W-w)/2:(H-h)/2[panel];"
+              f"[0][panel]overlay=(W-w)/2:(H-h)/2")
+        cmd = ["ffmpeg", "-y",
+               "-f", "lavfi", "-i", f"color=c={CARD_BG}:s={w}x{h}",
+               "-f", "lavfi", "-i", f"color=c=white:s={cw}x{ch}",
+               "-i", str(src), "-filter_complex", fc, "-frames:v", "1", str(out)]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0 or not out.exists():
             return None
