@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from pipeline import manifest
 import motion_render as mr
 
@@ -69,17 +68,16 @@ def _voice_done(slug, timings):
                                      for k, v in timings.items()])
 
 
-def _templates_present():
-    base = Path(__file__).resolve().parent.parent / ".claude/skills/yt-motion/templates/card"
+def _templates_present(monkeypatch, tmp_path):
+    base = tmp_path / "templates" / "card"
     base.mkdir(parents=True, exist_ok=True)
     for n in ("chapter.html", "outro.html"):
-        p = base / n
-        if not p.exists():
-            p.write_text("<html><body><h1></h1></body></html>")
+        (base / n).write_text("<html><body><h1></h1></body></html>")
+    monkeypatch.setattr(mr, "_TEMPLATES", tmp_path / "templates")
 
 
 def test_render_requires_voice_timings(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
                   "data": {"title": "t"}, "confirmed": True}])
@@ -88,7 +86,7 @@ def test_render_requires_voice_timings(tmp_path, monkeypatch):
 
 
 def test_render_refuses_unconfirmed_stays_pending(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 6.0})
     mr._init("proj")  # all confirmed:false
@@ -98,7 +96,7 @@ def test_render_refuses_unconfirmed_stays_pending(tmp_path, monkeypatch):
 
 
 def test_render_outro_card_uses_injected_renderer_and_persists_engine_version(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 6.0})
     manifest.set_stage("proj", "stitch", status="done")
@@ -117,7 +115,7 @@ def test_render_outro_card_uses_injected_renderer_and_persists_engine_version(tm
 def test_render_long_outro_fills_full_window_not_clamped(tmp_path, monkeypatch):
     # Bug-1 regression: a 15s outro must render a 15s MP4 (== the stitch segment),
     # not an 8s clamp that would freeze for 7s.
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 15.0})
     _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
@@ -132,7 +130,7 @@ def test_render_long_outro_fills_full_window_not_clamped(tmp_path, monkeypatch):
 
 
 def test_render_chapter_too_short_skips_to_broll(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 4.0, -1: 6.0})            # beat 8 too short for 3s flash + footage
     _confirm(d, [{"beat": 8, "kind": "card", "template": "card/chapter",
@@ -143,7 +141,7 @@ def test_render_chapter_too_short_skips_to_broll(tmp_path, monkeypatch):
 
 
 def test_render_retries_then_falls_back_to_broll(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 6.0})
     _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
@@ -158,7 +156,7 @@ def test_render_retries_then_falls_back_to_broll(tmp_path, monkeypatch):
 
 
 def test_normal_run_skips_unchanged_but_force_rerenders(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 6.0})
     _confirm(d, [{"beat": -1, "kind": "card", "template": "card/outro",
@@ -174,7 +172,7 @@ def test_normal_run_skips_unchanged_but_force_rerenders(tmp_path, monkeypatch):
 
 
 def test_only_renders_single_beat(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path); _templates_present()
+    monkeypatch.chdir(tmp_path); _templates_present(monkeypatch, tmp_path)
     d = manifest.project_dir("proj"); _script(d)
     _voice_done("proj", {8: 11.0, -1: 6.0})
     _confirm(d, [

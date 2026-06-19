@@ -1,9 +1,11 @@
 """Timing-fit for motion cards.
 
 Outro card fills the outro segment via an elastic HOLD (never stretching the
-intro/outro animation), capped so a mis-tagged runaway outro warns instead of
-freezing for 40s. Chapter card is a fixed short flash that must leave footage
-behind it on the chapter's first beat."""
+intro/outro animation). The hold is NEVER clamped — the outro card always fills
+the full window so there is no freeze or desync. A long outro only warns the
+operator to sanity-check; the card still renders to the full segment length.
+Chapter card is a fixed short flash that must leave footage behind it on the
+chapter's first beat."""
 
 
 def outro_hold(comp_min_s, outro_s, max_card_s):

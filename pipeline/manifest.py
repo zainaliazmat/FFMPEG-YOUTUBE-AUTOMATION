@@ -1,8 +1,8 @@
 """Per-video project folder + manifest.json helpers.
 
 The manifest is the single source of truth across stages. Phase-1 stages are
-voice -> media -> captions -> stitch. (Music is an optional local file, not a
-fetched stage; guard/publish are Phase 2.)
+capture -> voice -> media -> motion -> captions -> stitch. (Music is an optional
+local file, not a fetched stage; guard/publish are Phase 2.)
 """
 import json
 from datetime import datetime, timezone
