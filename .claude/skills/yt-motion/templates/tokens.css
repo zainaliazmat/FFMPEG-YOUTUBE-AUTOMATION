@@ -1,0 +1,17 @@
+/* The Leverage Loop — committed motion design tokens. Hand-authored, not generated.
+   "motion confirms, it doesn't sell." */
+:root {
+  --bg: #0b1a2a;          /* existing CARD_BG */
+  --accent: #38bdf8;
+  --verdict: #f5b700;     /* the one "verdict" semantic color */
+  --ink: #ffffff;
+  --muted: #93a4b3;
+  --grid: 8px;
+  --font-head: "DejaVu Sans", system-ui, sans-serif;  /* must be bundled in the image */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);             /* the ONLY easing family */
+  --dur-in: 500ms;
+  --dur-emph: 250ms;
+  --dur-out: 300ms;
+  /* BANNED: bounce, elastic, overshoot, springs, neon, >1 concurrent motion,
+     motion faster than 200ms or slower than 800ms. */
+}
