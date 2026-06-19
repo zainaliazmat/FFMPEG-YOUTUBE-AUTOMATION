@@ -227,12 +227,16 @@ def _wrap_text(text, width):
     return "\n".join(lines)
 
 
-def plan_segments(slug, aspect, script, timings, by_beat):
+def plan_segments(slug, aspect, script, timings, by_beat, motion_cards=None):
     """Build the full-timeline segment list and write card text files.
     Hook (id 0) and outro (id -1) become title cards; beats use their asset.
 
     ``by_beat`` is the reconciled ``{beat_id: asset}`` map (stock b-roll overlaid
-    with captured product stills, capture winning) from ``pipeline.assets``."""
+    with captured product stills, capture winning) from ``pipeline.assets``.
+    ``motion_cards`` is an optional ``{beat_id: asset}`` map of rendered card MP4s
+    (kind="card") from the motion stage; outro swaps drawtext, body beats get a
+    short flash prepended (mirroring the logo-reveal insert)."""
+    motion_cards = motion_cards or {}
     d = manifest.project_dir(slug)
     cards = d / "cards"
     cards.mkdir(exist_ok=True)
@@ -257,6 +261,11 @@ def plan_segments(slug, aspect, script, timings, by_beat):
         else:
             text = None
         if text is not None:
+            mc = motion_cards.get(t["id"]) if t["id"] == -1 else None  # hook never swaps
+            if mc:   # outro motion card swaps the drawtext card; use its rendered length
+                segments.append({"id": t["id"], "kind": "video",
+                                 "duration": mc["duration"], "path": mc["path"]})
+                continue
             tf = cards / f"seg_{t['id']}_{aspect}.txt"
             tf.write_text(_wrap_text(text, 26 if aspect == "9x16" else 42))
             segments.append({"id": t["id"], "kind": "card", "duration": dur,
@@ -287,6 +296,14 @@ def plan_segments(slug, aspect, script, timings, by_beat):
                 segments.append({"id": t["id"], "kind": "product",
                                  "duration": round(dur - intro, 3), "path": path})
                 continue
+        mc = motion_cards.get(t["id"])
+        if mc and t["id"] not in (0, -1) and dur > mc["duration"]:
+            card_dur = round(mc["duration"], 3)
+            segments.append({"id": t["id"], "kind": "video",
+                             "duration": card_dur, "path": mc["path"]})
+            segments.append({"id": t["id"], "kind": kind,
+                             "duration": round(dur - card_dur, 3), "path": path})
+            continue
         segments.append({"id": t["id"], "kind": kind, "duration": dur, "path": path})
     return segments
 
@@ -311,11 +328,13 @@ def _render(slug, force=False, aspects=("16x9",)):
     # stages.capture is optional: a project with no product captures just uses stock.
     capture_assets = (m["stages"].get("capture") or {}).get("assets", []) or []
     by_beat = pipeline_assets.merge_assets(media_assets, capture_assets)
+    motion_assets = (m["stages"].get("motion") or {}).get("assets", [])
+    motion_cards = {a["beat"]: a for a in motion_assets if a.get("kind") == "card"}
     music = m["stages"]["media"].get("music")
 
     outputs = []
     for aspect in aspects:
-        segments = plan_segments(slug, aspect, script, timings, by_beat)
+        segments = plan_segments(slug, aspect, script, timings, by_beat, motion_cards)
         captions = f"captions_{aspect}.ass"
         out_rel = f"out/video_{aspect}.mp4"
         cmd = build_command(segments, music, captions, out_rel, aspect)

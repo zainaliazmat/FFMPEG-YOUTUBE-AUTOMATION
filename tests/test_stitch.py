@@ -374,6 +374,30 @@ def test_captions_are_burned_in(tmp_path):
     assert with_text != empty, "captions did not change the frame -> not burned in"
 
 
+def test_plan_segments_outro_swap_and_chapter_insert(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    manifest = __import__("pipeline.manifest", fromlist=["manifest"])
+    d = manifest.project_dir("proj")
+    script = {"hook": "h", "outro": "o", "title": "t",
+              "chapters": [{"title": "Pricing", "start_beat": 8}]}
+    timings = [{"id": 0, "start": 0.0, "end": 3.0},
+               {"id": 8, "start": 3.0, "end": 14.0},     # 11s chapter beat
+               {"id": -1, "start": 14.0, "end": 20.0}]   # 6s outro
+    by_beat = {8: {"beat": 8, "path": "media/beat_8.mp4", "source": "pexels"}}
+    motion_cards = {
+        8: {"beat": 8, "kind": "card", "path": "media/motion_card_8.mp4", "duration": 3.0},
+        -1: {"beat": -1, "kind": "card", "path": "media/motion_card_-1.mp4", "duration": 6.0}}
+    segs = sv.plan_segments("proj", "16x9", script, timings, by_beat, motion_cards)
+    # outro is now the motion MP4, not a drawtext card; duration = mc["duration"]
+    outro = [s for s in segs if s["id"] == -1]
+    assert outro[0]["kind"] == "video" and outro[0]["path"] == "media/motion_card_-1.mp4"
+    assert outro[0]["duration"] == 6.0     # mc["duration"], not re-derived from the window
+    # chapter beat 8: a 3s card flash THEN 8s of footage
+    b8 = [s for s in segs if s["id"] == 8]
+    assert b8[0]["path"] == "media/motion_card_8.mp4" and b8[0]["duration"] == 3.0
+    assert b8[1]["path"] == "media/beat_8.mp4" and b8[1]["duration"] == 8.0
+
+
 @needs_ffmpeg
 def test_voice_not_dropped_when_music_present(tmp_path):
     # H1: with music, the voice must still dominate the mixed audio. The plan's
